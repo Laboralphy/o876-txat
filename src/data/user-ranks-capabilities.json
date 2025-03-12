@@ -1,0 +1,52 @@
+{
+    "USER_RANK_VIEWER": {
+        "rank": 10,
+        "capabilities": [
+            "CAPABILITY_READ"
+        ]
+    },
+    "USER_RANK_CHATTER": {
+        "rank": 20,
+        "capabilities": [
+            "CAPABILITY_READ",
+            "CAPABILITY_SAY"
+        ]
+    },
+    "USER_RANK_MODERATOR": {
+        "rank": 30,
+        "capabilities": [
+            "CAPABILITY_READ",
+            "CAPABILITY_SAY",
+            "CAPABILITY_BAN",
+            "CAPABILITY_UNBAN",
+            "CAPABILITY_MUTE",
+            "CAPABILITY_UNMUTE"
+        ]
+    },
+    "USER_RANK_ADMIN": {
+        "rank": 40,
+        "capabilities": [
+            "CAPABILITY_READ",
+            "CAPABILITY_SAY",
+            "CAPABILITY_BAN",
+            "CAPABILITY_UNBAN",
+            "CAPABILITY_MUTE",
+            "CAPABILITY_UNMUTE",
+            "CAPABILITY_PROMOTE",
+            "CAPABILITY_DEMOTE"
+        ]
+    },
+    "USER_RANK_HOST": {
+        "rank": 50,
+        "capabilities": [
+            "CAPABILITY_READ",
+            "CAPABILITY_SAY",
+            "CAPABILITY_BAN",
+            "CAPABILITY_UNBAN",
+            "CAPABILITY_MUTE",
+            "CAPABILITY_UNMUTE",
+            "CAPABILITY_PROMOTE",
+            "CAPABILITY_DEMOTE"
+        ]
+    }
+}
