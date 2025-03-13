@@ -1,41 +1,34 @@
 const CAPABILITIES = require('./data/capabilities.json');
-const Banishment = require('./Banishment');
+const Ban = require('./Ban');
 const Events = require('node:events');
 const EVENT_TYPES = require('./data/event-types.json');
 const userRanks = require('./user-ranks');
 const USER_RANKS = require('./data/user-ranks.json');
 const Message = require('./Message');
 const User = require('./User');
+const IDateProvider = require('./date-provider/IDateProvider');
 
 class Channel {
     constructor (id) {
         this._id = id;
-        this._name = '#' + id;
+        this._name = id;
         this._messages = [];
-        this._maxMessageCount = 256;
+        this._maxMessageCount = 100;
         this._users = new Map();
         this._userRanks = new Map();
         this._bans = new Map();
         this._events = new Events();
         this._defaultUserRank = USER_RANKS.USER_RANK_CHATTER;
         this._dateProvider = null;
+        this._permanent = false;
     }
 
-    /**
-     * @param dateProvider {IDateProvider}
-     */
-    set dateProvider (dateProvider) {
-        this._dateProvider = dateProvider;
-    }
-
-    /**
-     * @returns {IDateProvider}
-     */
-    get dateProvider () {
-        if (!this._dateProvider) {
-            throw new Error('Date provider not injected');
+    inject ({ dateProvider }) {
+        if (dateProvider instanceof IDateProvider) {
+            this._dateProvider = dateProvider;
+        } else {
+            throw new TypeError('Invalid date provider');
         }
-        return this._dateProvider;
     }
 
     get users () {
@@ -46,8 +39,46 @@ class Channel {
         return this._id;
     }
 
+    set id (value) {
+        this._id = value;
+    }
+
     get bans () {
         return this._bans;
+    }
+
+    get events () {
+        return this._events;
+    }
+
+    set permanent (value) {
+        this._permanent = value;
+    }
+
+    get permanent () {
+        return this._permanent;
+    }
+
+    get state () {
+        const userRanks = [];
+        for (const [idUser, rank] of this._userRanks) {
+            userRanks.push({
+                user: idUser,
+                rank: rank.id
+            });
+        }
+        const banList = [];
+        for (const [, ban] of this._bans) {
+            banList.push(ban.state);
+        }
+        return {
+            id: this.id,
+            name: this._name,
+            permanent: this.permanent,
+            userRanks,
+            banList,
+            defaultUserRank: this._defaultUserRank
+        };
     }
 
     postMessage (user, sText) {
@@ -58,13 +89,11 @@ class Channel {
             }
             this._messages.push(message);
             this._events.emit(EVENT_TYPES.EVENT_CHANNEL_MESSAGE, {
-                message,
-                channel: this
+                message
             });
         } else {
             this._events.emit(EVENT_TYPES.EVENT_USER_INSUFFICIENT_CAPABILITY, {
                 user: user,
-                channel: this,
                 capability: CAPABILITIES.CAPABILITY_SAY
             });
         }
@@ -119,19 +148,22 @@ class Channel {
             this.setUserRank(user, this._defaultUserRank);
         }
         const ban = this._bans.get(user.id);
-        if (ban && ban.isActive) {
-            this._events.emit(EVENT_TYPES.EVENT_USER_BANISHED, {
-                user,
-                channel: this,
-                ban
-            });
-            return false;
+        if (ban) {
+            if (ban.active) {
+                this._events.emit(EVENT_TYPES.EVENT_USER_BANNED, {
+                    user,
+                    ban
+                });
+                return false;
+            } else {
+                this._bans.delete(user.id);
+            }
         }
         this._users.set(user.id, user);
         this._events.emit(EVENT_TYPES.EVENT_USER_JOINED_CHANNEL, {
-            channel: this,
             user
         });
+        return true;
     }
 
     /**
@@ -145,24 +177,26 @@ class Channel {
         this._userRanks.delete(user.id);
         this._users.delete(user.id);
         this._events.emit(EVENT_TYPES.EVENT_USER_LEFT_CHANNEL, {
-            channel: this,
             user
         });
     }
 
-    banUser (user, reason, { duration = '', date = '' }) {
-        const ban = new Banishment(user, reason);
-        if (duration) {
-            ban.setDurationString(duration, this.dateProvider.now());
+    banUser (user, reason, { duration = '', date = '', permanent = false }) {
+        const ban = new Ban(user, reason);
+        ban.inject({ dateProvider: this._dateProvider });
+        if (permanent) {
+            ban.permanent = true;
+        } else if (duration) {
+            const dFrom = this._dateProvider.now();
+            ban.setDurationString(duration, dFrom);
         } else if (date) {
             ban.setUnbanDate(date);
         } else {
-            throw new Error('should specify "until", or "date" for banishment');
+            throw new Error('should specify "until", or "date" for ban');
         }
         this._bans.set(user.id, ban);
-        this._events.emit(EVENT_TYPES.EVENT_USER_BANISHED, {
+        this._events.emit(EVENT_TYPES.EVENT_USER_BANNED, {
             user,
-            channel: this,
             ban
         });
         this.removeUser(user);
@@ -173,12 +207,11 @@ class Channel {
         const ban = this._bans.get(user.id);
         if (ban) {
             this._bans.delete(user.id);
-            this._events.emit(EVENT_TYPES.EVENT_USER_UNBANISHED, {
-                user,
-                channel: this
+            this._events.emit(EVENT_TYPES.EVENT_USER_UNBANNED, {
+                user
             });
         } else {
-            throw new Error(`user ${user.id} is not banished from ${this.id}`);
+            throw new Error(`user ${user.id} is not banned from ${this.id}`);
         }
     }
 }

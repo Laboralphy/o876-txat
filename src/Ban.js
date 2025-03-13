@@ -1,14 +1,45 @@
-const REGEX_YMD = /^(\d{4})[-\/]+(\d{2})[-\/]+(\d{2})$/;
-const REGEX_YMDHM = /^(\d{4})[-\/]+(\d{2})[-\/]+(\d{2})\s+(\d{2}):+(\d{2})$/;
-const REGEX_YMDHMS = /^(\d{4})[-\/]+(\d{2})[-\/]+(\d{2})\s+(\d{2}):+(\d{2}):+(\d{2})$/;
 const REGEX_INT_STR = /^(\d+)\s*([a-zA-Z]+)$/;
 
-class Banishment {
+class Ban {
     constructor (user, reason) {
         this._user = user;
         this._reason = reason;
         this._until = null;
         this._permanent = false;
+        this._dateProvider = null;
+        this._banner = null;
+    }
+
+    inject ({ dateProvider }) {
+        this._dateProvider = dateProvider;
+    }
+
+    set banner (banner) {
+        this._banner = banner;
+    }
+
+    get banner () {
+        return this._banner;
+    }
+
+    get state () {
+        return {
+            user: this._user.id,
+            banner: this._banner.id,
+            permanent: this._permanent,
+            reason: this._reason,
+            until: this._until.getTime()
+        };
+    }
+
+    /**
+     * @returns {IDateProvider}
+     */
+    get dateProvider () {
+        if (!this._dateProvider) {
+            throw new Error('Date provider not injected');
+        }
+        return this._dateProvider;
     }
 
     get user () {
@@ -25,7 +56,7 @@ class Banishment {
 
     set until (date) {
         if (!(date instanceof Date)) {
-            throw new TypeError('Banishment date must be instance od Date');
+            throw new TypeError('Ban date must be instance of Date');
         }
         this._until = date;
         this._permanent = false;
@@ -53,10 +84,7 @@ class Banishment {
      * @returns {Date} L'objet Date mis à jour.
      */
     _addTimeToDate(date, seconds = 0, minutes = 0, hours = 0, days = 0) {
-        // Convertir les minutes, heures et jours en millisecondes
-        const totalMilliseconds = (seconds * 1000) + (minutes * 60 * 1000) + (hours * 60 * 60 * 1000) + (days * 24 * 60 * 60 * 1000);
-        // Créer un nouvel objet Date basé sur l'objet Date d'origine
-        return new Date(date.getTime() + totalMilliseconds);
+        return this._dateProvider.add(date, { seconds, minutes, hours, days });
     }
 
     setDurationString (s, dFrom) {
@@ -112,58 +140,18 @@ class Banishment {
         }
     }
 
-    _parseDate (sDate) {
-        let r;
-        r = sDate.match(REGEX_YMDHMS);
-        if (r) {
-            return new Date(
-                parseInt(r[1]),
-                parseInt(r[2]) - 1,
-                parseInt(r[3]),
-                parseInt(r[4]),
-                parseInt(r[5]),
-                parseInt(r[6])
-            );
-        }
-        r = sDate.match(REGEX_YMDHM);
-        if (r) {
-            return new Date(
-                parseInt(r[1]),
-                parseInt(r[2]) - 1,
-                parseInt(r[3]),
-                parseInt(r[4]),
-                parseInt(r[5]),
-                0
-            );
-        }
-        r = sDate.match(REGEX_YMD);
-        if (r) {
-            return new Date(
-                parseInt(r[1]),
-                parseInt(r[2]) - 1,
-                parseInt(r[3]),
-                0,
-                0,
-                0
-            );
-        }
-        throw new TypeError(`could not parse input date ${sDate}`);
-    }
-
     /**
      *
      * @param sDate {string} format YYYY-MM-DD [HH:MM:SS]
      */
     setUnbanDate (sDate) {
-        this.until = this._parseDate(sDate);
+        this.until = this._dateProvider.parse(sDate);
     }
 
-    isActive (d = null) {
-        if (d === null) {
-            d = new Date();
-        }
+    get active () {
+        const d = this._dateProvider.now();
         return this._permanent || this.until.getTime() >= d.getTime();
     }
 }
 
-module.exports = Banishment;
+module.exports = Ban;
