@@ -95,9 +95,6 @@ class TxatManager {
         }
     }
 
-
-
-
     /**
      * Specifically relevant for channels
      * Dispatches an incoming event to all users in the channel
@@ -360,8 +357,7 @@ class TxatManager {
     banUser (user, channel, duration, reason, banner) {
         this.checkChannelUserCapability(banner, channel, CAPABILITIES.CAPABILITY_BAN);
         if (duration === 'forever' || duration === 'permanent' || duration === 'perm') {
-            const b = channel.banUser(user, reason, { permanent: true });
-
+            channel.banUser(user, reason, { permanent: true });
         } else if (duration.match(/^[0-9]+\s+[a-zA-Z]+$/)) {
             channel.banUser(user, reason, { duration: duration });
         } else {
@@ -380,6 +376,23 @@ class TxatManager {
         channel.unbanUser(user);
     }
 
+    /**
+     * Ignores a user
+     * @param user {User}
+     * @param ignoredUser {User}
+     */
+    ignoreUser (user, ignoredUser) {
+        user.addIgnore(ignoredUser);
+    }
+
+    /**
+     * Unignore user
+     * @param user {User}
+     * @param ignoredUser {User}
+     */
+    unignoreUser (user, ignoredUser) {
+        user.removeIgnore(ignoredUser);
+    }
 }
 
 module.exports = TxatManager;
