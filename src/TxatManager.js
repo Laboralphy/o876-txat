@@ -166,9 +166,30 @@ class TxatManager {
     }
 
     disconnectUser (user) {
+        this._events.emit(EVENT_TYPES.EVENT_USER_SAVE_STATE, { state: this.getUserFullState(user) });
+        for (const channel of this.getChannelList()) {
+            if (channel.users.has(user.id)) {
+                channel.removeUser(user);
+            }
+        }
         this._disconnectedUser.set(user.id, user);
         this._users.delete(user.id);
         user.connected = false;
+    }
+
+    getUserFullState (user) {
+        const oUserState = user.state;
+        const aBanState = [];
+        for (const channel of this.getChannelList()) {
+            const ban = channel.bans.get(user.id);
+            if (ban) {
+                aBanState.push(ban.state);
+            }
+        }
+        return {
+            ...oUserState,
+            bans: aBanState
+        };
     }
 }
 

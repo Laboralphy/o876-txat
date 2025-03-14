@@ -31,6 +31,9 @@ class Channel {
         }
     }
 
+    /**
+     * @returns {Map<string, User>}
+     */
     get users () {
         return this._users;
     }
