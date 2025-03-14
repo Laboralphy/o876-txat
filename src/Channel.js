@@ -14,13 +14,22 @@ class Channel {
         this._name = id;
         this._messages = [];
         this._maxMessageCount = 100;
+        /**
+         * @type {Map<string, User>}
+         * @private
+         */
         this._users = new Map();
         this._userRanks = new Map();
+        /**
+         * @type {Map<string, Ban>}
+         * @private
+         */
         this._bans = new Map();
         this._events = new Events();
         this._defaultUserRank = USER_RANKS.USER_RANK_CHATTER;
         this._dateProvider = null;
         this._permanent = false;
+        this._public = true;
     }
 
     inject ({ dateProvider }) {
@@ -29,6 +38,14 @@ class Channel {
         } else {
             throw new TypeError('Invalid date provider');
         }
+    }
+
+    get public () {
+        return this._public;
+    }
+
+    set public (value) {
+        this._public = value;
     }
 
     /**
@@ -182,6 +199,13 @@ class Channel {
         this._events.emit(EVENT_TYPES.EVENT_USER_LEFT_CHANNEL, {
             user
         });
+    }
+
+    close () {
+        this._permanent = false;
+        for (const [, user] of this.users) {
+            this.removeUser(user);
+        }
     }
 
     banUser (user, reason, { duration = '', date = '', permanent = false }) {

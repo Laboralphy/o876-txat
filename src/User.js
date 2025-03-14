@@ -2,12 +2,16 @@ const Events = require('node:events');
 const EVENT_TYPES = require('./data/event-types.json');
 
 class User {
-    constructor () {
-        this._id = '';
+    constructor (id) {
+        this._id = id;
         this._name = '';
         this._ignoreList = new Set();
         this._events = new Events();
         this._connected = false;
+    }
+
+    get events () {
+        return this._events;
     }
 
     get connected () {
@@ -52,11 +56,19 @@ class User {
         return this._id;
     }
 
+    /**
+     * @typedef TxatUserState {object}
+     * @property id {string}
+     * @property name {string}
+     * @property ignoredUsers {string[]}
+     *
+     * @returns {TxatUserState}
+     */
     get state () {
         return {
             id: this._id,
             name: this._name,
-            ignoreList: [...this._ignoreList].map(u => u.id)
+            ignoredUsers: [...this._ignoreList].map(u => u.id)
         };
     }
 }

@@ -22,6 +22,16 @@ class Ban {
         return this._banner;
     }
 
+    /**
+     * @typedef TxatBanState {object}
+     * @property user {string}
+     * @property banner {string}
+     * @property permanent {boolean}
+     * @property reason {string}
+     * @property until {number}
+     *
+     * @returns {TxatBanState}
+     */
     get state () {
         return {
             user: this._user.id,
