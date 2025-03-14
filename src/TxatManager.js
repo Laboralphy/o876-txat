@@ -137,6 +137,7 @@ class TxatManager {
             EVENT_TYPES.EVENT_USER_INSUFFICIENT_CAPABILITY
         ], channel);
         this._channels.set(channel.id, channel);
+        this._events.emit(EVENT_TYPES.EVENT_CHANNEL_CREATED, { channel });
         return channel;
     }
 
@@ -149,6 +150,7 @@ class TxatManager {
             const channel = this.getChannel(id);
             channel.close();
             this._channels.delete(id);
+            this._events.emit(EVENT_TYPES.EVENT_CHANNEL_DESTROYED, { channel });
         } else {
             throw new Error(`this channel ${id} does not exist`);
         }
