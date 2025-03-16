@@ -6,27 +6,6 @@ const User = require('../src/User');
 const Channel = require('../src/Channel');
 const USER_RANKS = require('../src/data/user-ranks.json');
 
-class MockDate extends IDateProvider {
-    constructor () {
-        super();
-        this.stdDate = new StdDateProvider();
-        this.dateNow = new Date(2020, 0, 1, 0, 0, 0);
-    }
-
-    now () {
-        return new Date(this.dateNow.getTime());
-    }
-
-    add (date, addTime) {
-        return this.stdDate.add(date, addTime);
-    }
-
-    parse (sDate) {
-        return this.stdDate.parse(sDate);
-    }
-}
-
-
 
 
 describe('channelExists', () => {
@@ -85,7 +64,7 @@ describe('createUser', () => {
     });
     it('should *NOT* add created user to user list', function () {
         const tm = new TxatManager();
-        const u = tm.createUser('aaa');
+        tm.createUser('aaa');
         expect(tm.userExists('aaa')).toBeFalsy();
     });
 });
@@ -104,7 +83,7 @@ describe('getChannel', () => {
 describe('getUser', () => {
     it('should not return newly created user prior to connecting', () => {
         const tm = new TxatManager();
-        const u = tm.createUser('aaa');
+        tm.createUser('aaa');
         expect(() => tm.getUser('aaa')).toThrow('user aaa does not exist');
     });
 
@@ -140,7 +119,7 @@ describe('userJoinsChannel', () => {
         tm.events.on(EVENT_TYPES.EVENT_USER_CONNECTED, ({ user }) => {
             aEvents.push({ type: EVENT_TYPES.EVENT_USER_CONNECTED, user });
         });
-        tm.events.on(EVENT_TYPES.EVENT_USER_JOINED_CHANNEL, ({ user, channel }) => {
+        tm.events.on(EVENT_TYPES.EVENT_USER_JOINED_CHANNEL, ({ user }) => {
             aEvents.push({ type: EVENT_TYPES.EVENT_USER_JOINED_CHANNEL, user });
         });
         const u = tm.connectUser('u1');
@@ -371,7 +350,7 @@ describe('ignoreUser / unignore', () => {
 
         const aLogMessages = [];
 
-        tm.events.on(EVENT_TYPES.EVENT_CHANNEL_MESSAGE, ({ message, recipient }) => {
+        tm.events.on(EVENT_TYPES.EVENT_CHANNEL_MESSAGE, ({ recipient }) => {
             aLogMessages.push(recipient);
         });
 

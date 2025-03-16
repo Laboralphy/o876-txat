@@ -102,7 +102,7 @@ class Channel {
 
     /**
      * Returns the event emitter instance
-     * @returns {module:events.EventEmitter<DefaultEventMap>}
+     * @returns {EventEmitter}
      */
     get events () {
         return this._events;
