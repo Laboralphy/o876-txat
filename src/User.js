@@ -8,6 +8,11 @@ class User {
         this._ignoreList = new Set();
         this._events = new Events();
         this._connected = false;
+        this._data = {};
+    }
+
+    get data () {
+        return this._data;
     }
 
     get events () {

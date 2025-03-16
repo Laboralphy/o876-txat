@@ -1,8 +1,15 @@
+const User = require('./User');
+
 class Message {
-    constructor (content, sender) {
+    /**
+     * @param content {string}
+     * @param sender {User}
+     * @param timestamp {number}
+     */
+    constructor (content, sender, timestamp = 0) {
         this._content = '';
-        this._sender = null;
-        this._timestamp = Date.now();
+        this._sender = sender;
+        this._timestamp = timestamp;
         this._content = content;
     }
 

@@ -1,52 +1,46 @@
 {
     "USER_RANK_VIEWER": {
-        "rank": 10,
-        "capabilities": [
-            "CAPABILITY_READ"
-        ]
+        "index": 10,
+        "capabilities": []
     },
     "USER_RANK_CHATTER": {
-        "rank": 20,
+        "index": 20,
         "capabilities": [
-            "CAPABILITY_READ",
             "CAPABILITY_SAY"
         ]
     },
     "USER_RANK_MODERATOR": {
-        "rank": 30,
+        "index": 30,
         "capabilities": [
-            "CAPABILITY_READ",
             "CAPABILITY_SAY",
             "CAPABILITY_BAN",
             "CAPABILITY_UNBAN",
-            "CAPABILITY_MUTE",
-            "CAPABILITY_UNMUTE"
+            "CAPABILITY_MANAGE_CHANNEL",
+            "CAPABILITY_JOIN_PRIVATE"
         ]
     },
     "USER_RANK_ADMIN": {
-        "rank": 40,
+        "index": 40,
         "capabilities": [
-            "CAPABILITY_READ",
             "CAPABILITY_SAY",
             "CAPABILITY_BAN",
             "CAPABILITY_UNBAN",
-            "CAPABILITY_MUTE",
-            "CAPABILITY_UNMUTE",
             "CAPABILITY_PROMOTE",
-            "CAPABILITY_DEMOTE"
+            "CAPABILITY_MANAGE_CHANNEL",
+            "CAPABILITY_JOIN_PRIVATE",
+            "CAPABILITY_INVITE"
         ]
     },
     "USER_RANK_HOST": {
-        "rank": 50,
+        "index": 50,
         "capabilities": [
-            "CAPABILITY_READ",
             "CAPABILITY_SAY",
             "CAPABILITY_BAN",
             "CAPABILITY_UNBAN",
-            "CAPABILITY_MUTE",
-            "CAPABILITY_UNMUTE",
             "CAPABILITY_PROMOTE",
-            "CAPABILITY_DEMOTE"
+            "CAPABILITY_MANAGE_CHANNEL",
+            "CAPABILITY_JOIN_PRIVATE",
+            "CAPABILITY_INVITE"
         ]
     }
 }

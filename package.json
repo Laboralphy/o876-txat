@@ -1,16 +1,20 @@
 {
-  "name": "@laboralphy/o876-txat",
-  "version": "1.1.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "jest"
-  },
-  "keywords": ["chat", "library"],
-  "author": "Laboralphy",
-  "license": "ISC",
-  "description": "An embeddable chat library, multi channels, moderation, event based",
-  "devDependencies": {
-    "eslint": "^9.22.0",
-    "jest": "^29.7.0"
-  }
+    "name": "@laboralphy/o876-txat",
+    "version": "1.2.0",
+    "main": "index.js",
+    "scripts": {
+        "test": "jest",
+        "docs-gen": "npx documentation build {src/*.js} -f md -o docs"
+    },
+    "keywords": [
+        "chat",
+        "library"
+    ],
+    "author": "Laboralphy",
+    "license": "ISC",
+    "description": "An embeddable chat library, multi channels, moderation, event based",
+    "devDependencies": {
+        "eslint": "^9.22.0",
+        "jest": "^29.7.0"
+    }
 }
