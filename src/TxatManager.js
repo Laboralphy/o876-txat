@@ -292,6 +292,16 @@ class TxatManager {
         }
     }
 
+    /**
+     * Return the list of channel the specified user is connected to
+     * @param user {User}
+     * @return {Channel[]}
+     */
+    getUserConnectedChannels (user) {
+        return Array.from(this._channels.values())
+            .filter(channel => channel.users.has(user.id));
+    }
+
     /** ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ***** */
     /** ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ***** */
     /** ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ****** USE CASES ***** */
