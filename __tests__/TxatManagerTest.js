@@ -419,6 +419,47 @@ describe('ignoreUser / unignore', () => {
     });
 });
 
-describe('team discussion', function () {
+describe('information channel', function () {
+    it ('should not be able to talk in this channel, only receive message, when chan default user rank is set to VIEWER', () => {
+        const tm = new TxatManager();
 
+        const aLog = [];
+
+        tm.events.on(EVENT_TYPES.EVENT_CHANNEL_MESSAGE, ({ recipient, channel, message }) => {
+            if (tm.getUser(recipient).data.system) {
+                return;
+            }
+            aLog.push({
+                recipient,
+                channel: channel.id,
+                message: message.sender.name + ': ' + message.content
+            });
+        });
+
+        const u1 = tm.connectUser('u1');
+        const usys = tm.connectUser('system');
+        usys.data.system = true;
+        usys.name = 'System';
+        tm.userJoinsChannel(usys, 'info');
+        const infoChan = tm.getChannel('info');
+        infoChan.public = true;
+        infoChan.permanent = true;
+        infoChan.defaultUserRank = USER_RANKS.USER_RANK_VIEWER;
+
+        tm.userJoinsChannel(u1, infoChan);
+
+        expect(aLog.length).toBe(0);
+
+        tm.userSendsChannelMessage(usys, infoChan, 'les utilisateurs sont des fdp');
+
+        expect(aLog.length).toBe(1);
+        expect(aLog[0].channel).toBe('info');
+        expect(aLog[0].message).toBe('System: les utilisateurs sont des fdp');
+
+        tm.userSendsChannelMessage(u1, infoChan, 'moi aussi je dis : les utilisateur sont des fdp');
+
+        expect(aLog.length).toBe(1);
+        expect(aLog[0].channel).toBe('info');
+        expect(aLog[0].message).toBe('System: les utilisateurs sont des fdp');
+    });
 });

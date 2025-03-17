@@ -140,6 +140,14 @@ class Channel {
         this._name = value;
     }
 
+    set defaultUserRank (value) {
+        this._defaultUserRank = value;
+    }
+
+    get defaultUserRank () {
+        return this._defaultUserRank;
+    }
+
     /**
      * post a new message on this channel
      * @param user {User}
