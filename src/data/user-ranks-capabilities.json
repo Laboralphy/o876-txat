@@ -9,6 +9,13 @@
             "CAPABILITY_SAY"
         ]
     },
+    "USER_RANK_MEMBER": {
+        "index": 25,
+        "capabilities": [
+            "CAPABILITY_SAY",
+            "CAPABILITY_JOIN_PRIVATE"
+        ]
+    },
     "USER_RANK_MODERATOR": {
         "index": 30,
         "capabilities": [
