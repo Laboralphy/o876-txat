@@ -75,7 +75,7 @@ describe('Channel', () => {
         });
         it('should not be able to post if user has no write power', () => {
             const c = new Txat.Channel('c1');
-            c.addUser('u1');
+            c.addUser('u1', { powers: [] });
             expect(() => c.postMessage('u1', 'msg1')).toThrow();
         });
         it('should be able to receive message only if user has read power', () => {

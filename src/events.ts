@@ -8,6 +8,7 @@ export enum TXAT_EVENTS {
     USER_JOINED = 'user.joined',
     USER_LEFT = 'user.left',
     CLOSED = 'closed',
+    POWER_CHANGED = 'power.changed',
 }
 
 /**
@@ -23,6 +24,7 @@ export enum LEAVE_REASONS {
  */
 export type PresenceDto = {
     id: string;
+    name: string;
     color: string;
     powers: POWERS[];
 };
@@ -65,6 +67,17 @@ export type ChannelClosedDto = {
     idChannel: string;
 };
 
+/**
+ * Sent to the user whose power changed (e.g. muted : WRITE revoked)
+ */
+export type PowerChangedDto = {
+    recv: string;
+    idChannel: string;
+    user: PresenceDto;
+    power: POWERS;
+    granted: boolean;
+};
+
 export interface TxatEventMap {
     [TXAT_EVENTS.MESSAGE_POST]: MessagePostDto;
     [TXAT_EVENTS.YOU_JOINED]: YouJoinedDto;
@@ -72,4 +85,5 @@ export interface TxatEventMap {
     [TXAT_EVENTS.USER_JOINED]: UserJoinedDto;
     [TXAT_EVENTS.USER_LEFT]: UserLeftDto;
     [TXAT_EVENTS.CLOSED]: ChannelClosedDto;
+    [TXAT_EVENTS.POWER_CHANGED]: PowerChangedDto;
 }

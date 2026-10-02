@@ -7,10 +7,13 @@ export { POWERS } from './powers';
 export { CHANNEL_ATTRIBUTES } from './channel-attributes';
 export { TXAT_EVENTS, LEAVE_REASONS } from './events';
 export { TypedEmitter } from './TypedEmitter';
+export { TxatError, TXAT_ERRORS } from './errors';
 
 // events types — `export type` so strict ESM linking doesn't look for a runtime
 // binding these type-only DTOs don't have.
 export type { Listener, ErrorHandler, TypedEmitterOptions } from './TypedEmitter';
+export type { ChannelOptions, AddUserOptions } from './Channel';
+export type { PowerChangeListener } from './UserPresence';
 export type {
     TxatEventMap,
     PresenceDto,
@@ -20,4 +23,5 @@ export type {
     UserLeftDto,
     MessagePostDto,
     ChannelClosedDto,
+    PowerChangedDto,
 } from './events';

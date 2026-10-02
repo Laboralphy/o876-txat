@@ -1,10 +1,10 @@
-import { Channel } from './Channel';
+import { Channel, type ChannelOptions } from './Channel';
 import { CHANNEL_ATTRIBUTES } from './channel-attributes';
-import { POWERS } from './powers';
 import { User } from './User';
 import { TXAT_EVENTS, type TxatEventMap } from './events';
 import { TypedEmitter } from './TypedEmitter';
 import type { Message } from './Message';
+import { TXAT_ERRORS, TxatError } from './errors';
 
 export class System {
     private readonly channels = new Map<string, Channel>();
@@ -20,7 +20,10 @@ export class System {
         if (user) {
             return user;
         } else {
-            throw new ReferenceError(`User ${idUser} not registered in chat system`);
+            throw new TxatError(
+                TXAT_ERRORS.USER_NOT_FOUND,
+                `User ${idUser} not registered in chat system`
+            );
         }
     }
 
@@ -63,21 +66,25 @@ export class System {
         this.forward(channel, TXAT_EVENTS.USER_JOINED);
         this.forward(channel, TXAT_EVENTS.USER_LEFT);
         this.forward(channel, TXAT_EVENTS.MESSAGE_POST);
+        this.forward(channel, TXAT_EVENTS.POWER_CHANGED);
     }
 
     /**
      * Adds a new channel to the system
      * @param id channel identifier
-     * @param tag
+     * @param options tag, persistence, visibility, history size, default powers
      */
-    addChannel(id: string, tag: string = ''): Channel {
+    addChannel(id: string, options: ChannelOptions = {}): Channel {
         if (!this.channels.has(id)) {
-            const channel = new Channel(id, tag);
+            const channel = new Channel(id, options);
             this.watchChannel(channel);
             this.channels.set(id, channel);
             return channel;
         } else {
-            throw new Error(`Channel id ${id} already exists`);
+            throw new TxatError(
+                TXAT_ERRORS.CHANNEL_ALREADY_EXISTS,
+                `Channel id ${id} already exists`
+            );
         }
     }
 
@@ -93,7 +100,7 @@ export class System {
             channel.events.removeAllListeners();
             return channel;
         } else {
-            throw new Error(`Channel id ${id} does not exist`);
+            throw new TxatError(TXAT_ERRORS.CHANNEL_NOT_FOUND, `Channel id ${id} does not exist`);
         }
     }
 
@@ -114,7 +121,7 @@ export class System {
     getChannel(id: string) {
         const channel = this.channels.get(id);
         if (!channel) {
-            throw new Error(`Channel id ${id} not found`);
+            throw new TxatError(TXAT_ERRORS.CHANNEL_NOT_FOUND, `Channel id ${id} not found`);
         }
         return channel;
     }
@@ -129,7 +136,7 @@ export class System {
     }
 
     /**
-     * A user will joinne an existing channel
+     * A user joins an existing channel, with the channel default powers
      * (both user and channel must exist)
      * @param idUser
      * @param idChannel
@@ -138,11 +145,17 @@ export class System {
         const user = this.getUser(idUser);
         const channel = this.getChannel(idChannel);
         if (user.joinedChannels.has(channel)) {
-            throw new Error(`user ${idUser} is already on channel ${idChannel}`);
+            throw new TxatError(
+                TXAT_ERRORS.USER_ALREADY_ON_CHANNEL,
+                `User ${idUser} is already on channel ${idChannel}`
+            );
         }
         // check access before leaving any tagged channel, so a denied join leaves user untouched
         if (!channel.isAllowed(idUser)) {
-            throw new Error(`User ${idUser} is not allowed to access channel ${idChannel}`);
+            throw new TxatError(
+                TXAT_ERRORS.ACCESS_DENIED,
+                `User ${idUser} is not allowed to access channel ${idChannel}`
+            );
         }
         // try to determine if the new channel is a tagged one
         const sTag = channel.tag;
@@ -157,7 +170,7 @@ export class System {
                 });
         }
         // joined channel list is updated by the YOU_JOINED handler, before listeners are called
-        channel.addUser(idUser, [POWERS.READ, POWERS.WRITE]);
+        channel.addUser(idUser, { name: user.name });
         return channel;
     }
 
@@ -179,7 +192,10 @@ export class System {
      */
     registerUser(id: string, name: string = '') {
         if (this.users.has(id)) {
-            throw new Error(`User ${id} is already registered in chat system`);
+            throw new TxatError(
+                TXAT_ERRORS.USER_ALREADY_REGISTERED,
+                `User ${id} is already registered in chat system`
+            );
         }
         const user = new User(id, name === '' ? id : name);
         this.users.set(id, user);

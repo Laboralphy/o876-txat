@@ -2,6 +2,11 @@ import { POWERS } from './powers';
 import type { PresenceDto } from './events';
 
 /**
+ * Called when a power is actually granted or revoked
+ */
+export type PowerChangeListener = (presence: UserPresence, power: POWERS, granted: boolean) => void;
+
+/**
  * A user presence is the capacity of a user on a channel
  * A user maybe admin on a channel and a simple reader on another channel
  * @class
@@ -10,15 +15,32 @@ export class UserPresence {
     private readonly _powers = new Set<POWERS>();
     private _color: string = '';
 
-    constructor(public readonly id: string) {}
+    /**
+     * Notified of every power change ; set by the channel owning this presence
+     */
+    public onPowerChange: PowerChangeListener | undefined;
+
+    /**
+     * @param id user id
+     * @param name user display name (defaults to id)
+     */
+    constructor(
+        public readonly id: string,
+        public readonly name: string = id
+    ) {}
 
     grant(power: POWERS) {
-        this._powers.add(power);
+        if (!this._powers.has(power)) {
+            this._powers.add(power);
+            this.onPowerChange?.(this, power, true);
+        }
         return this;
     }
 
     revoke(power: POWERS) {
-        this._powers.delete(power);
+        if (this._powers.delete(power)) {
+            this.onPowerChange?.(this, power, false);
+        }
         return this;
     }
 
@@ -47,6 +69,7 @@ export class UserPresence {
     toJSON(): PresenceDto {
         return {
             id: this.id,
+            name: this.name,
             color: this._color,
             powers: this.powers,
         };

@@ -38,8 +38,8 @@ describe('non-persistent channel auto-removal', () => {
     });
     it('should remove the former tagged channel when its last user switches channel', () => {
         const s = setup('u1');
-        s.addChannel('room1', 'room');
-        s.addChannel('room2', 'room');
+        s.addChannel('room1', { tag: 'room' });
+        s.addChannel('room2', { tag: 'room' });
         s.userJoinChannel('u1', 'room1');
         s.userJoinChannel('u1', 'room2');
         expect(s.isChannelExists('room1')).toBe(false);
@@ -65,8 +65,8 @@ describe('removeChannel', () => {
     });
     it('should not block joining another channel with the same tag afterwards', () => {
         const s = setup('u1');
-        s.addChannel('room1', 'room');
-        s.addChannel('room2', 'room');
+        s.addChannel('room1', { tag: 'room' });
+        s.addChannel('room2', { tag: 'room' });
         s.userJoinChannel('u1', 'room1');
         s.removeChannel('room1');
         expect(() => s.userJoinChannel('u1', 'room2')).not.toThrow();
@@ -77,8 +77,8 @@ describe('removeChannel', () => {
 describe('userJoinChannel ordering', () => {
     it('should not leave the former tagged channel when joining the new one is denied', () => {
         const s = setup('u1');
-        const room1 = s.addChannel('room1', 'room');
-        s.addChannel('room2', 'room').ban('u1');
+        const room1 = s.addChannel('room1', { tag: 'room' });
+        s.addChannel('room2', { tag: 'room' }).ban('u1');
         s.userJoinChannel('u1', 'room1');
         expect(() => s.userJoinChannel('u1', 'room2')).toThrow();
         expect(room1.getUser('u1')).toBeDefined();

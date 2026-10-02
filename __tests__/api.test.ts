@@ -7,7 +7,8 @@ import {
     CHANNEL_ATTRIBUTES,
     LEAVE_REASONS,
 } from '../src';
-import type { MessagePostDto, PresenceDto, TxatEventMap } from '../src';
+import { TxatError, TXAT_ERRORS } from '../src';
+import type { MessagePostDto, PowerChangedDto, PresenceDto, TxatEventMap } from '../src';
 
 function setup(...idUsers: string[]) {
     const s = new System();
@@ -119,7 +120,7 @@ describe('event payloads', () => {
         expect(JSON.parse(JSON.stringify(dto))).toEqual({
             recv: 'u1',
             idChannel: 'c1',
-            user: { id: 'u1', color: 'red', powers: ['read', 'write'] },
+            user: { id: 'u1', name: 'u1', color: 'red', powers: ['read', 'write'] },
             message: {
                 id: dto.message.id,
                 idChannel: 'c1',
@@ -309,5 +310,138 @@ describe('listener errors', () => {
         expect(delivered).toEqual(['u2', 'u3']);
         expect(errors).toHaveLength(1);
         expect(s.getChannel('c1').getMessages()).toHaveLength(1);
+    });
+});
+
+describe('error codes', () => {
+    function codeOf(fn: () => unknown) {
+        try {
+            fn();
+        } catch (e) {
+            expect(e).toBeInstanceOf(TxatError);
+            expect(e).toBeInstanceOf(Error);
+            return (e as TxatError).code;
+        }
+        throw new Error('expected a TxatError');
+    }
+
+    it('should throw a TxatError with a code for every misuse', () => {
+        const s = setup('u1', 'u2');
+        s.addChannel('c1');
+        s.userJoinChannel('u1', 'c1');
+        s.getChannel('c1').ban('u2');
+        s.getChannel('c1').getUser('u1')!.revoke(POWERS.WRITE);
+        expect(codeOf(() => s.getUser('nobody'))).toBe(TXAT_ERRORS.USER_NOT_FOUND);
+        expect(codeOf(() => s.registerUser('u1'))).toBe(TXAT_ERRORS.USER_ALREADY_REGISTERED);
+        expect(codeOf(() => s.getChannel('nowhere'))).toBe(TXAT_ERRORS.CHANNEL_NOT_FOUND);
+        expect(codeOf(() => s.removeChannel('nowhere'))).toBe(TXAT_ERRORS.CHANNEL_NOT_FOUND);
+        expect(codeOf(() => s.addChannel('c1'))).toBe(TXAT_ERRORS.CHANNEL_ALREADY_EXISTS);
+        expect(codeOf(() => s.userJoinChannel('u1', 'c1'))).toBe(
+            TXAT_ERRORS.USER_ALREADY_ON_CHANNEL
+        );
+        expect(codeOf(() => s.userJoinChannel('u2', 'c1'))).toBe(TXAT_ERRORS.ACCESS_DENIED);
+        expect(codeOf(() => s.userLeaveChannel('u2', 'c1'))).toBe(TXAT_ERRORS.USER_NOT_ON_CHANNEL);
+        expect(codeOf(() => s.postMessage('u2', 'c1', 'x'))).toBe(TXAT_ERRORS.USER_NOT_ON_CHANNEL);
+        expect(codeOf(() => s.postMessage('u1', 'c1', 'x'))).toBe(TXAT_ERRORS.WRITE_DENIED);
+    });
+});
+
+describe('channel options', () => {
+    it('should configure tag, persistence, visibility and history size', () => {
+        const s = setup('u1');
+        const c1 = s.addChannel('c1', { tag: 'room', persistent: true, hidden: true, maxLines: 2 });
+        expect(c1.tag).toBe('room');
+        expect(c1.attributes.has(CHANNEL_ATTRIBUTES.PERSISTENT)).toBe(true);
+        expect(c1.attributes.has(CHANNEL_ATTRIBUTES.HIDDEN)).toBe(true);
+        expect(c1.maxLines).toBe(2);
+        expect(s.getChannelList()).toEqual([]);
+        s.userJoinChannel('u1', 'c1');
+        s.userLeaveChannel('u1', 'c1');
+        expect(s.isChannelExists('c1')).toBe(true);
+    });
+    it('should default to an ephemeral, listed, untagged channel', () => {
+        const c = new Channel('c1');
+        expect(c.tag).toBe('');
+        expect(c.attributes.size).toBe(0);
+        expect(c.maxLines).toBe(1000);
+        expect(Array.from(c.defaultPowers)).toEqual([POWERS.READ, POWERS.WRITE]);
+    });
+    it('should make read-only channels with default powers', () => {
+        const s = setup('admin', 'u1');
+        s.addChannel('news', { persistent: true, defaultPowers: [POWERS.READ] });
+        s.userJoinChannel('u1', 'news');
+        s.userJoinChannel('admin', 'news');
+        s.getChannel('news').getUser('admin')!.grant(POWERS.WRITE);
+        expect(() => s.postMessage('u1', 'news', 'hi')).toThrow(TxatError);
+        expect(() => s.postMessage('admin', 'news', 'server restart at noon')).not.toThrow();
+    });
+    it('should trim the history at once when maxLines is lowered', () => {
+        const s = setup('u1');
+        const c1 = s.addChannel('c1');
+        s.userJoinChannel('u1', 'c1');
+        ['m1', 'm2', 'm3', 'm4'].forEach((m) => s.postMessage('u1', 'c1', m));
+        c1.maxLines = 2;
+        expect(c1.getMessages().map((m) => m.content)).toEqual(['m3', 'm4']);
+        s.postMessage('u1', 'c1', 'm5');
+        expect(c1.getMessages().map((m) => m.content)).toEqual(['m4', 'm5']);
+    });
+});
+
+describe('power changes', () => {
+    it('should notify the concerned user when muted and unmuted', () => {
+        const s = setup('u1', 'u2');
+        s.addChannel('c1');
+        s.userJoinChannel('u1', 'c1');
+        s.userJoinChannel('u2', 'c1');
+        const received: PowerChangedDto[] = [];
+        s.events.on(TXAT_EVENTS.POWER_CHANGED, (dto) => received.push(dto));
+        const u2 = s.getChannel('c1').getUser('u2')!;
+        u2.revoke(POWERS.WRITE);
+        u2.revoke(POWERS.WRITE); // no change, no event
+        u2.grant(POWERS.WRITE);
+        expect(received).toEqual([
+            {
+                recv: 'u2',
+                idChannel: 'c1',
+                user: { id: 'u2', name: 'u2', color: '', powers: ['read'] },
+                power: POWERS.WRITE,
+                granted: false,
+            },
+            {
+                recv: 'u2',
+                idChannel: 'c1',
+                user: { id: 'u2', name: 'u2', color: '', powers: ['read', 'write'] },
+                power: POWERS.WRITE,
+                granted: true,
+            },
+        ]);
+    });
+    it('should not notify initial powers, nor changes after leaving', () => {
+        const s = setup('u1');
+        s.addChannel('c1', { persistent: true });
+        const listener = vi.fn();
+        s.events.on(TXAT_EVENTS.POWER_CHANGED, listener);
+        s.userJoinChannel('u1', 'c1');
+        const presence = s.getChannel('c1').getUser('u1')!;
+        s.userLeaveChannel('u1', 'c1');
+        presence.revoke(POWERS.READ);
+        expect(listener).not.toHaveBeenCalled();
+    });
+});
+
+describe('names', () => {
+    it('should carry the registered user name in event payloads', () => {
+        const s = new System();
+        s.registerUser('u1', 'Alice');
+        s.registerUser('u2', 'Bob');
+        s.addChannel('c1');
+        s.userJoinChannel('u1', 'c1');
+        const names: string[] = [];
+        s.events.on(TXAT_EVENTS.USER_JOINED, ({ user }) => names.push(user.name));
+        s.events.on(TXAT_EVENTS.MESSAGE_POST, ({ user }) => names.push(user.name));
+        s.userJoinChannel('u2', 'c1');
+        s.postMessage('u2', 'c1', 'hello');
+        expect(names).toEqual(['Bob', 'Bob', 'Bob']);
+        expect(s.getChannel('c1').getUser('u2')!.name).toBe('Bob');
     });
 });
