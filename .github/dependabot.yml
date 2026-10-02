@@ -9,5 +9,7 @@ updates:
     schedule:
       interval: monthly
     groups:
+      # majors come as separate PRs: one incompatible major must not block the safe updates
       dev-dependencies:
         dependency-type: development
+        update-types: [minor, patch]
