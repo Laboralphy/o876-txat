@@ -55,6 +55,7 @@
         "test:watch": "vitest",
         "lint": "eslint .",
         "format": "prettier --write .",
+        "format:check": "prettier --check .",
         "check:exports": "attw --pack . && publint",
         "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
     },

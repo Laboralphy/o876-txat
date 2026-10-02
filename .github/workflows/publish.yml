@@ -1,0 +1,43 @@
+name: Publish to npm
+
+# Publishes when a GitHub release is published. Authentication uses npm trusted publishing
+# (OIDC): no npm token is stored in the repository.
+# A release marked as "pre-release" is published under the `next` dist-tag.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+      - name: Check release tag matches package version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "${TAG#v}" != "$VERSION" ]; then
+            echo "::error::Release tag '$TAG' does not match package.json version '$VERSION'"
+            exit 1
+          fi
+      - run: npm ci
+      - name: Publish
+        env:
+          DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
+        run: npm publish --provenance --access public --tag "$DIST_TAG"
