@@ -1,8 +1,12 @@
-name: Publish to npm
+name: Stage publish to npm
 
-# Publishes when a GitHub release is published. Authentication uses npm trusted publishing
-# (OIDC): no npm token is stored in the repository.
-# A release marked as "pre-release" is published under the `next` dist-tag.
+# Stages the package on npm when a GitHub release is published. Authentication uses npm trusted
+# publishing (OIDC): no npm token is stored in the repository. The trusted publisher must allow
+# "stage publish".
+# The staged version is NOT public until a maintainer approves it with 2FA:
+#   npm stage list @laboralphy/o876-txat
+#   npm stage approve <stage-id>
+# A release marked as "pre-release" is staged under the `next` dist-tag.
 
 on:
   release:
@@ -36,8 +40,10 @@ jobs:
             echo "::error::Release tag '$TAG' does not match package.json version '$VERSION'"
             exit 1
           fi
+      - name: Install an npm version supporting staged publishing
+        run: npm install -g npm@^11.21.0
       - run: npm ci
-      - name: Publish
+      - name: Stage publish
         env:
           DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
-        run: npm publish --provenance --access public --tag "$DIST_TAG"
+        run: npm stage publish --provenance --access public --tag "$DIST_TAG"
