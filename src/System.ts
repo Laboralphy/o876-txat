@@ -56,6 +56,14 @@ export class System {
                     channel,
                 };
                 this._events.emit(TXAT_EVENTS.YOU_LEFT, dto);
+                // a non-persistent channel disappears when its last user leaves
+                if (
+                    !channel.attributes.has(CHANNEL_ATRIBUTES.PERSISTANT) &&
+                    channel.users.length <= 0 &&
+                    this.channels.get(id) === channel
+                ) {
+                    this.removeChannel(id);
+                }
             });
             channel.events.on(TXAT_EVENTS.USER_JOINED, ({ recv, user }) => {
                 const dto: ChannelJoinedDto = {
@@ -72,12 +80,6 @@ export class System {
                     user,
                 };
                 this._events.emit(TXAT_EVENTS.USER_LEFT, dto);
-                if (
-                    !channel.attributes.has(CHANNEL_ATRIBUTES.PERSISTANT) &&
-                    channel.users.length <= 0
-                ) {
-                    this.removeChannel(id);
-                }
             });
             channel.events.on(TXAT_EVENTS.MESSAGE_POST, ({ recv, user, message }) => {
                 const dto: MessagePostDto = {
@@ -109,7 +111,11 @@ export class System {
     removeChannel(id: string) {
         const channel = this.channels.get(id);
         if (channel) {
+            const presences = channel.users;
             channel.close();
+            presences.forEach((presence) => {
+                this.users.get(presence.id)?.joinedChannels.delete(channel);
+            });
             this.channels.delete(id);
             return channel;
         } else {
@@ -160,6 +166,10 @@ export class System {
         if (user.joinedChannels.has(channel)) {
             throw new Error(`user ${idUser} is already on channel ${idChannel}`);
         }
+        // check access before leaving any tagged channel, so a denied join leaves user untouched
+        if (!channel.isAllowed(idUser)) {
+            throw new Error(`User ${idUser} is not allowed to access channel ${idChannel}`);
+        }
         // try to determine if the new channel is a tagged one
         const sTag = channel.tag;
         if (sTag != '') {
@@ -172,8 +182,9 @@ export class System {
                     this.userLeaveChannel(user.id, channel.id);
                 });
         }
-        channel.addUser(idUser).grant(POWERS.READ).grant(POWERS.WRITE);
+        // register membership first so join event listeners see a consistent state
         user.joinedChannels.add(channel);
+        channel.addUser(idUser, [POWERS.READ, POWERS.WRITE]);
         return channel;
     }
 
@@ -185,11 +196,8 @@ export class System {
     userLeaveChannel(idUser: string, idChannel: string) {
         const user = this.getUser(idUser);
         const channel = this.getChannel(idChannel);
-        if (!channel) {
-            throw new Error(`Channel id ${idChannel} does not exist`);
-        }
-        channel.removeUser(idUser);
         user.joinedChannels.delete(channel);
+        channel.removeUser(idUser);
     }
 
     /**
@@ -198,6 +206,9 @@ export class System {
      * @param name
      */
     registerUser(id: string, name: string = '') {
+        if (this.users.has(id)) {
+            throw new Error(`User ${id} is already registered in chat system`);
+        }
         const user = new User(id, name === '' ? id : name);
         this.users.set(id, user);
         return user;
@@ -218,8 +229,8 @@ export class System {
     unregisterUser(idUser: string) {
         // remove this user from all joined channels
         const user = this.getUser(idUser);
-        user.joinedChannels.forEach((channel) => {
-            channel.removeUser(idUser);
+        Array.from(user.joinedChannels).forEach((channel) => {
+            this.userLeaveChannel(idUser, channel.id);
         });
         this.users.delete(idUser);
     }

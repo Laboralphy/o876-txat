@@ -49,26 +49,41 @@ export class Channel {
     }
 
     /**
+     * Return true if the specified user is allowed to join this channel
+     * (not blacklisted, and whitelisted if this channel is private)
+     * @param idUser user id
+     */
+    isAllowed(idUser: string): boolean {
+        return !this.blackList.has(idUser) && (!this.private || this.whiteList.has(idUser));
+    }
+
+    /**
      * Adds a new user to this channel
      * This user will now be able to read channel content, and, if granted, write messages
      * @param idUser joining user id
+     * @param powers powers granted to the user before join events are emitted
      * @return UserPresence the instance of user presence is return so another system may
      * update this instance to reflect user privileges on this channel
      */
-    addUser(idUser: string) {
+    addUser(idUser: string, powers: Iterable<POWERS> = []) {
         const user = this._users.get(idUser);
         if (user) {
             return user;
         } else {
-            if (this.blackList.has(idUser) || (this.private && !this.whiteList.has(idUser))) {
+            if (!this.isAllowed(idUser)) {
                 throw new Error(`User ${idUser} is not allowed to access this channel.`);
             }
             const user = new UserPresence(idUser);
+            for (const power of powers) {
+                user.grant(power);
+            }
+            this._users.set(idUser, user);
             this.events.emit(TXAT_EVENTS.JOINED, { recv: idUser });
             this._users.forEach((u: UserPresence) => {
-                this.events.emit(TXAT_EVENTS.USER_JOINED, { recv: u.id, user });
+                if (u !== user) {
+                    this.events.emit(TXAT_EVENTS.USER_JOINED, { recv: u.id, user });
+                }
             });
-            this._users.set(idUser, user);
             return user;
         }
     }
@@ -127,6 +142,7 @@ export class Channel {
                 recv: u.id,
             });
         });
+        this._users.clear();
     }
 
     /**
