@@ -1,5 +1,5 @@
 export enum POWERS {
-    READ,
-    WRITE,
-    MODERATE,
+    READ = 'read',
+    WRITE = 'write',
+    MODERATE = 'moderate',
 }

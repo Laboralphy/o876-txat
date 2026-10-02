@@ -1,4 +1,5 @@
 import { POWERS } from './powers';
+import type { PresenceDto } from './events';
 
 /**
  * A user presence is the capacity of a user on a channel
@@ -6,23 +7,30 @@ import { POWERS } from './powers';
  * @class
  */
 export class UserPresence {
-    private readonly powers = new Set<POWERS>();
+    private readonly _powers = new Set<POWERS>();
     private _color: string = '';
 
     constructor(public readonly id: string) {}
 
     grant(power: POWERS) {
-        this.powers.add(power);
+        this._powers.add(power);
         return this;
     }
 
     revoke(power: POWERS) {
-        this.powers.delete(power);
+        this._powers.delete(power);
         return this;
     }
 
     hasPower(power: POWERS) {
-        return this.powers.has(power);
+        return this._powers.has(power);
+    }
+
+    /**
+     * Return the list of granted powers
+     */
+    get powers(): POWERS[] {
+        return Array.from(this._powers);
     }
 
     get color() {
@@ -31,5 +39,16 @@ export class UserPresence {
 
     set color(color: string) {
         this._color = color;
+    }
+
+    /**
+     * Return a plain snapshot of this presence, safe to serialize
+     */
+    toJSON(): PresenceDto {
+        return {
+            id: this.id,
+            color: this._color,
+            powers: this.powers,
+        };
     }
 }

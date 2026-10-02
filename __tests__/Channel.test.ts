@@ -1,5 +1,5 @@
 import * as Txat from '../src';
-import { POWERS, UserPresence } from '../src';
+import { POWERS } from '../src';
 import { TXAT_EVENTS } from '../src';
 
 describe('Txat', () => {
@@ -85,20 +85,9 @@ describe('Channel', () => {
             u2.grant(POWERS.READ);
             const log: string[] = [];
 
-            c.events.on(
-                TXAT_EVENTS.MESSAGE_POST,
-                ({
-                    message,
-                    user,
-                    recv,
-                }: {
-                    user: UserPresence;
-                    recv: string;
-                    message: Txat.Message;
-                }) => {
-                    log.push(`from: ${user.id} to: ${recv} - ${message.content}`);
-                }
-            );
+            c.events.on(TXAT_EVENTS.MESSAGE_POST, ({ message, user, recv }) => {
+                log.push(`from: ${user.id} to: ${recv} - ${message.content}`);
+            });
 
             expect(() => c.postMessage('u1', 'msg1')).not.toThrow();
             expect(log).toEqual(['from: u1 to: u1 - msg1', 'from: u1 to: u2 - msg1']);
@@ -136,12 +125,12 @@ describe('Channel', () => {
         it('should return true only when whitelist is modified', () => {
             const c = new Txat.Channel('c1');
             expect(c.private).toBe(false);
-            c.whiteList.add('u1');
+            c.allow('u1');
             expect(c.private).toBe(true);
         });
         it('should not be able to enter channel if blacklisted', () => {
             const c = new Txat.Channel('c1');
-            c.blackList.add('u1');
+            c.ban('u1');
             expect(() => c.addUser('u1')).toThrow();
             expect(c.users.length).toBe(0);
             expect(() => c.addUser('u2')).not.toThrow();

@@ -1,7 +1,7 @@
 # @laboralphy/o876-txat
 
-An embeddable, in-memory chat engine for Node.js. Users, channels, permissions, message history,
-all event based.
+An embeddable, in-memory chat engine for JavaScript and TypeScript. Users, channels, permissions,
+message history, all event based.
 
 txat holds the chat **state and rules**, and tells you **who must receive what**. It does not
 open sockets, store anything on disk or render text: you plug it into your own transport
@@ -14,10 +14,11 @@ automatically switches when moving around, but nothing in it is game-specific.
 - Per-user, per-channel powers: read, write, moderate
 - Bounded message history per channel (backlog for late joiners)
 - Exclusive **tagged** channels (joining one leaves the other of the same tag)
-- Private (allow-list) and banned (block-list) access
+- Private channels, bans and kicks, enforced on users already present
 - Hidden channels (not listed) and persistent channels (survive when empty)
 - One event per recipient, so routing to the right connection is trivial
-- Written in TypeScript, ships ESM + CommonJS + type declarations, zero runtime dependency
+- Fully typed events with plain, serializable payloads
+- Written in TypeScript, ships ESM + CommonJS + type declarations, zero dependency
 
 ## Install
 
@@ -25,19 +26,20 @@ automatically switches when moving around, but nothing in it is game-specific.
 npm install @laboralphy/o876-txat
 ```
 
-Requires Node.js 18 or later.
+Runs on Node.js 20 or later, and on any runtime providing `crypto.randomUUID()` (Deno, Bun,
+browsers in a secure context).
 
 ## Quick start
 
 ```ts
-import { System, TXAT_EVENTS, type MessagePostDto } from '@laboralphy/o876-txat';
+import { System, TXAT_EVENTS } from '@laboralphy/o876-txat';
 
 const chat = new System();
 
 // Every event carries `recv`: the id of the user it must be delivered to.
-chat.events.on(TXAT_EVENTS.MESSAGE_POST, ({ recv, channel, message }: MessagePostDto) => {
+chat.events.on(TXAT_EVENTS.MESSAGE_POST, ({ recv, idChannel, message }) => {
     const sender = chat.getUser(message.idUser);
-    console.log(`to ${recv}: [${channel.id}] ${sender.name}: ${message.content}`);
+    console.log(`to ${recv}: [${idChannel}] ${sender.name}: ${message.content}`);
 });
 
 chat.registerUser('u1', 'Alice');
@@ -51,6 +53,8 @@ chat.postMessage('u1', 'general', 'Hello everyone!');
 // to u2: [general] Alice: Hello everyone!
 ```
 
+Listener payloads are inferred from the event name: no need to annotate them.
+
 ## Core ideas
 
 | Concept          | What it is                                                                                   |
@@ -59,7 +63,7 @@ chat.postMessage('u1', 'general', 'Hello everyone!');
 | **User**         | A registered user: `id`, display `name`, and the set of `joinedChannels`.                    |
 | **Channel**      | A conversation: present users, access lists, attributes, message history.                    |
 | **UserPresence** | A user _inside one channel_: their powers there (`READ`, `WRITE`, `MODERATE`) and a color.   |
-| **Message**      | `idUser`, `content`, and `ts` (timestamp in milliseconds).                                   |
+| **Message**      | `id` (UUID), `idChannel`, `idUser`, `content`, and `ts` (timestamp in milliseconds).         |
 
 Because powers live on the presence, the same user can be a moderator on one channel, muted on
 another and a simple reader on a third.
@@ -67,68 +71,71 @@ another and a simple reader on a third.
 ## Wiring a transport
 
 Events are emitted once **per recipient**. You never compute who must receive a message, you
-only look up the connection of `recv`:
+only look up the connection of `recv`. Payloads are plain objects, so they can be sent as they
+are:
 
 ```ts
 import { System, TXAT_EVENTS } from '@laboralphy/o876-txat';
-import type {
-    MessagePostDto,
-    ChannelJoinedDto,
-    ChannelLeftDto,
-    YouJoinedDto,
-    YouLeftDto,
-    ChannelClosedDto,
-} from '@laboralphy/o876-txat';
 
 const chat = new System();
 const connections = new Map<string, { send(data: string): void }>(); // your sockets
 
-function send(idUser: string, payload: object) {
-    connections.get(idUser)?.send(JSON.stringify(payload));
+for (const event of Object.values(TXAT_EVENTS)) {
+    chat.events.on(event, (payload) => {
+        connections.get(payload.recv)?.send(JSON.stringify({ event, payload }));
+    });
 }
-
-chat.events.on(TXAT_EVENTS.MESSAGE_POST, ({ recv, channel, message }: MessagePostDto) =>
-    send(recv, {
-        type: 'message',
-        channel: channel.id,
-        from: chat.getUser(message.idUser).name,
-        text: message.content,
-        ts: message.ts,
-    })
-);
-chat.events.on(TXAT_EVENTS.YOU_JOINED, ({ recv, channel }: YouJoinedDto) =>
-    send(recv, { type: 'joined', channel: channel.id, users: channel.users.map((u) => u.id) })
-);
-chat.events.on(TXAT_EVENTS.YOU_LEFT, ({ recv, channel }: YouLeftDto) =>
-    send(recv, { type: 'left', channel: channel.id })
-);
-chat.events.on(TXAT_EVENTS.USER_JOINED, ({ recv, channel, user }: ChannelJoinedDto) =>
-    send(recv, { type: 'user-joined', channel: channel.id, user: user.id })
-);
-chat.events.on(TXAT_EVENTS.USER_LEFT, ({ recv, channel, user }: ChannelLeftDto) =>
-    send(recv, { type: 'user-left', channel: channel.id, user: user.id })
-);
-chat.events.on(TXAT_EVENTS.CLOSED, ({ recv, channel }: ChannelClosedDto) =>
-    send(recv, { type: 'closed', channel: channel.id })
-);
 ```
 
-> Event payloads hold the live `Channel` and `UserPresence` objects. Pick the fields you need,
-> as above, rather than serializing the payload as a whole.
+Or handle each event your own way:
+
+```ts
+chat.events.on(TXAT_EVENTS.YOU_LEFT, ({ recv, idChannel, reason }) => {
+    const text =
+        reason === LEAVE_REASONS.KICKED
+            ? `You have been kicked from ${idChannel}.`
+            : `You left ${idChannel}.`;
+    connections.get(recv)?.send(text);
+});
+```
 
 ### Events reference
 
-| `TXAT_EVENTS`  | Payload type       | Emitted to                                  |
-| -------------- | ------------------ | ------------------------------------------- |
-| `YOU_JOINED`   | `YouJoinedDto`     | the user who joined                         |
-| `YOU_LEFT`     | `YouLeftDto`       | the user who left                           |
-| `USER_JOINED`  | `ChannelJoinedDto` | every other user already in the channel     |
-| `USER_LEFT`    | `ChannelLeftDto`   | every user remaining in the channel         |
-| `MESSAGE_POST` | `MessagePostDto`   | every user of the channel with `READ` power |
-| `CLOSED`       | `ChannelClosedDto` | every user of a channel being removed       |
+| `TXAT_EVENTS`  | Payload                              | Emitted to                                  |
+| -------------- | ------------------------------------ | ------------------------------------------- |
+| `YOU_JOINED`   | `{ recv, idChannel }`                | the user who joined                         |
+| `YOU_LEFT`     | `{ recv, idChannel, reason }`        | the user who left or was kicked             |
+| `USER_JOINED`  | `{ recv, idChannel, user }`          | every other user already in the channel     |
+| `USER_LEFT`    | `{ recv, idChannel, user, reason }`  | every user remaining in the channel         |
+| `MESSAGE_POST` | `{ recv, idChannel, user, message }` | every user of the channel with `READ` power |
+| `CLOSED`       | `{ recv, idChannel }`                | every user of a channel being removed       |
+
+- `user` is a snapshot of the presence at the time of the event: `{ id, color, powers }`
+  (`PresenceDto`).
+- `reason` is `LEAVE_REASONS.LEFT` (`'left'`) or `LEAVE_REASONS.KICKED` (`'kicked'`).
+- `message` is a `Message`: `{ id, idChannel, idUser, content, ts }`.
+
+Payload types are exported (`YouJoinedDto`, `YouLeftDto`, `UserJoinedDto`, `UserLeftDto`,
+`MessagePostDto`, `ChannelClosedDto`, `PresenceDto`), as well as the whole map (`TxatEventMap`).
 
 All events are emitted synchronously. When `YOU_JOINED` fires, the user is already present in
-the channel with their powers granted.
+the channel with their powers granted, and the channel is in their `joinedChannels`. When
+`YOU_LEFT` or `CLOSED` fires, the channel can still be read with `chat.getChannel(idChannel)`.
+
+The emitter supports `on`, `once`, `off`, `emit`, `listenerCount` and `removeAllListeners`.
+
+### Listener errors
+
+A failing listener never breaks a broadcast: if delivering a message to one user throws (a
+closed socket, a bug), every other recipient still gets it, and `postMessage` does not throw.
+The error, as well as the rejection of an `async` listener, goes to the emitter's `onError`
+handler, which logs to `console.error` by default. Plug in your own logger:
+
+```ts
+chat.events.onError = (error, event, payload) => {
+    logger.error({ error, event, recv: payload.recv }, 'chat listener failed');
+};
+```
 
 ## What you can do with it
 
@@ -140,12 +147,15 @@ Each channel keeps its last `maxLines` messages (1000 by default).
 const lobby = chat.addChannel('lobby');
 lobby.maxLines = 50;
 
-chat.events.on(TXAT_EVENTS.YOU_JOINED, ({ recv, channel }: YouJoinedDto) => {
-    for (const message of channel.getMessages()) {
-        send(recv, { type: 'history', channel: channel.id, text: message.content, ts: message.ts });
+chat.events.on(TXAT_EVENTS.YOU_JOINED, ({ recv, idChannel }) => {
+    for (const message of chat.getChannel(idChannel).getMessages()) {
+        send(recv, { type: 'history', ...message });
     }
 });
 ```
+
+Message ids are UUIDs, so clients can deduplicate, or reference a message to reply, quote or
+report it.
 
 ### Mute a user, or let them stop listening
 
@@ -163,7 +173,7 @@ presence?.revoke(POWERS.READ); // u2 stays in the channel but no longer receives
 ```
 
 `MODERATE` is not interpreted by txat itself: it is a flag your application checks before
-allowing moderation commands (kick, mute others…).
+allowing moderation commands.
 
 ```ts
 chat.getChannel('general').getUser('u1')?.grant(POWERS.MODERATE);
@@ -177,11 +187,46 @@ function mute(idModerator: string, idTarget: string, idChannel: string) {
 }
 ```
 
+### Kick and ban
+
+```ts
+const general = chat.getChannel('general');
+
+general.kick('u3'); // u3 is removed, and may join again
+general.ban('u3'); // u3 is removed if present, and can no longer join
+general.unban('u3');
+```
+
+A kicked or banned user receives `YOU_LEFT` and the others `USER_LEFT`, both with
+`reason: 'kicked'`.
+
+### Private channels
+
+Adding users to a channel's white list makes it **private**: only listed users may stay or join.
+Access lists are enforced at once: whoever is present and no longer allowed is kicked.
+
+```ts
+const guild = chat.addChannel('guild:dragons');
+guild.allow('u1');
+guild.allow('u2');
+guild.private; // true
+
+chat.userJoinChannel('u3', 'guild:dragons'); // throws: not allowed
+
+guild.disallow('u2'); // u2 is kicked if present
+```
+
+> Calling `allow()` on a public channel with users in it turns it private and kicks everybody
+> not on the list. Set up the white list before users join.
+
+`whiteList` and `blackList` are read-only sets: use `allow` / `disallow` / `ban` / `unban` to
+change them.
+
 ### Room channels with tags
 
 A channel can be created with a **tag**. A user can only be in one channel per tag: joining a
 tagged channel makes them leave the channel they were in with the same tag. This is ideal for
-location-based chat (rooms, zones, game tables, voice-like "currently in" channels):
+location-based chat (rooms, zones, game tables, "currently in" channels):
 
 ```ts
 chat.addChannel('room:tavern', 'room');
@@ -196,14 +241,14 @@ channels and exactly one room at a time.
 
 ### Ephemeral and persistent channels
 
-By default, a channel is **removed automatically when its last user leaves**: perfect for
-on-the-fly channels (a party, a duel, a private conversation). Mark a channel `PERSISTANT` to
-keep it alive while empty:
+By default, a channel is **removed automatically when its last user leaves** (or is kicked):
+perfect for on-the-fly channels (a party, a duel, a private conversation). Mark a channel
+`PERSISTENT` to keep it alive while empty:
 
 ```ts
-import { CHANNEL_ATRIBUTES } from '@laboralphy/o876-txat';
+import { CHANNEL_ATTRIBUTES } from '@laboralphy/o876-txat';
 
-chat.addChannel('general').attributes.add(CHANNEL_ATRIBUTES.PERSISTANT);
+chat.addChannel('general').attributes.add(CHANNEL_ATTRIBUTES.PERSISTENT);
 
 chat.addChannel('party-42'); // will vanish once everybody has left
 ```
@@ -226,44 +271,16 @@ function join(idUser: string, idChannel: string) {
 is handy for staff channels or for the many auto-generated room channels:
 
 ```ts
-chat.addChannel('staff').attributes.add(CHANNEL_ATRIBUTES.HIDDEN);
+chat.addChannel('staff').attributes.add(CHANNEL_ATTRIBUTES.HIDDEN);
 
 chat.getChannelList().map((c) => c.id); // 'staff' is not listed
-```
-
-### Private channels and bans
-
-Adding anyone to a channel's `whiteList` makes it **private**: only listed users may join. Users in
-the `blackList` can never join.
-
-```ts
-const guild = chat.addChannel('guild:dragons');
-guild.whiteList.add('u1');
-guild.whiteList.add('u2');
-guild.private; // true
-
-chat.userJoinChannel('u3', 'guild:dragons'); // throws: not allowed
-
-chat.getChannel('general').blackList.add('u3');
-```
-
-Access lists are checked when a user joins. To ban someone who is already in the channel, add
-them to the block-list **and** make them leave:
-
-```ts
-function ban(idUser: string, idChannel: string) {
-    chat.getChannel(idChannel).blackList.add(idUser);
-    if (chat.getChannel(idChannel).getUser(idUser)) {
-        chat.userLeaveChannel(idUser, idChannel);
-    }
-}
 ```
 
 ### Colors
 
 Each presence carries a free-form `color` string, so a user can have a different color per
-channel. txat stores it; your display decides what it means (CSS color, ANSI code, palette
-index…).
+channel. txat stores it and includes it in event payloads; your display decides what it means
+(CSS color, ANSI code, palette index…).
 
 ```ts
 const presence = chat.getChannel('general').getUser('u1');
@@ -292,55 +309,100 @@ if (chat.isUserRegistered('u2')) {
 }
 ```
 
+### Using a channel on its own
+
+A `Channel` works without a `System`, and its `events` emitter emits the same events with the
+same payloads. Use it when you need a single room and no user registry; tags and automatic
+removal are `System` features.
+
+```ts
+import { Channel, POWERS, TXAT_EVENTS } from '@laboralphy/o876-txat';
+
+const room = new Channel('room');
+room.events.on(TXAT_EVENTS.MESSAGE_POST, ({ recv, message }) => send(recv, message));
+room.addUser('u1', [POWERS.READ, POWERS.WRITE]);
+room.postMessage('u1', 'alone here');
+```
+
+## Errors
+
+txat prefers a loud error to a silent no-op. These calls throw:
+
+- `registerUser` with an id already registered; `getUser` / `unregisterUser` with an unknown id
+- `addChannel` with an existing id; `getChannel` / `removeChannel` with an unknown id
+- `userJoinChannel` when the user is already on the channel, or not allowed (banned, or not on
+  the white list of a private channel)
+- `userLeaveChannel` / `removeUser` / `kick` when the user is not on the channel
+- `postMessage` when the user is not on the channel or has no `WRITE` power there
+
 ## API overview
 
 ### `System`
 
-| Member                                    | Description                                                         |
-| ----------------------------------------- | ------------------------------------------------------------------- |
-| `events`                                  | `EventEmitter` emitting all `TXAT_EVENTS`                           |
-| `registerUser(id, name?)`                 | Register a user (name defaults to id). Throws if already registered |
-| `unregisterUser(id)`                      | Leave all channels and forget the user                              |
-| `isUserRegistered(id)`                    | `boolean`                                                           |
-| `getUser(id)`                             | `User`, throws if not registered                                    |
-| `addChannel(id, tag?)`                    | Create a channel. Throws if the id exists                           |
-| `removeChannel(id)`                       | Close and forget a channel                                          |
-| `isChannelExists(id)`                     | `boolean`                                                           |
-| `getChannel(id)`                          | `Channel`, throws if not found                                      |
-| `getChannelList()`                        | All channels except `HIDDEN` ones                                   |
-| `userJoinChannel(idUser, idChannel)`      | Join with `READ` + `WRITE`, leaving any channel with the same tag   |
-| `userLeaveChannel(idUser, idChannel)`     | Leave a channel                                                     |
-| `postMessage(idUser, idChannel, content)` | Post a message. Throws if the user has no `WRITE` power there       |
+| Member                                    | Description                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `events`                                  | Typed emitter of all `TXAT_EVENTS`                                |
+| `registerUser(id, name?)`                 | Register a user (name defaults to id)                             |
+| `unregisterUser(id)`                      | Leave all channels and forget the user                            |
+| `isUserRegistered(id)`                    | `boolean`                                                         |
+| `getUser(id)`                             | `User`                                                            |
+| `addChannel(id, tag?)`                    | Create a channel                                                  |
+| `removeChannel(id)`                       | Close and forget a channel                                        |
+| `isChannelExists(id)`                     | `boolean`                                                         |
+| `getChannel(id)`                          | `Channel`                                                         |
+| `getChannelList()`                        | All channels except `HIDDEN` ones                                 |
+| `userJoinChannel(idUser, idChannel)`      | Join with `READ` + `WRITE`, leaving any channel with the same tag |
+| `userLeaveChannel(idUser, idChannel)`     | Leave a channel                                                   |
+| `postMessage(idUser, idChannel, content)` | Post a message, returns the `Message`                             |
 
 ### `Channel`
 
-| Member                   | Description                                              |
-| ------------------------ | -------------------------------------------------------- |
-| `id`, `tag`              | Identifier and optional exclusivity tag                  |
-| `users`                  | Present users, as `UserPresence[]`                       |
-| `getUser(idUser)`        | `UserPresence \| undefined`                              |
-| `maxLines`               | History size (default 1000)                              |
-| `getMessages()`          | Copy of the history, oldest first                        |
-| `whiteList`, `blackList` | `Set<string>` of user ids                                |
-| `private`                | `true` when the white-list is not empty                  |
-| `isAllowed(idUser)`      | Whether the user may join, according to the access lists |
-| `attributes`             | `Set<CHANNEL_ATRIBUTES>`: `PERSISTANT`, `HIDDEN`         |
+| Member                         | Description                                              |
+| ------------------------------ | -------------------------------------------------------- |
+| `id`, `tag`                    | Identifier and optional exclusivity tag                  |
+| `events`                       | Typed emitter of this channel's events                   |
+| `users`                        | Present users, as `UserPresence[]`                       |
+| `getUser(idUser)`              | `UserPresence \| undefined`                              |
+| `addUser(idUser, powers?)`     | Add a user with initial powers (no tag handling)         |
+| `removeUser(idUser, reason?)`  | Remove a user                                            |
+| `kick(idUser)`                 | Remove a user with a `kicked` reason                     |
+| `ban(idUser)`, `unban(idUser)` | Change the black list, kicking the user if present       |
+| `allow(idUser)`, `disallow(…)` | Change the white list, kicking users who lose access     |
+| `whiteList`, `blackList`       | `ReadonlySet<string>` of user ids                        |
+| `private`                      | `true` when the white list is not empty                  |
+| `isAllowed(idUser)`            | Whether the user may join, according to the access lists |
+| `postMessage(idUser, content)` | Post a message, returns the `Message`                    |
+| `maxLines`                     | History size (default 1000)                              |
+| `getMessages()`                | Copy of the history, oldest first                        |
+| `attributes`                   | `Set<CHANNEL_ATTRIBUTES>`: `PERSISTENT`, `HIDDEN`        |
 
 ### `UserPresence`
 
-| Member                          | Description                    |
-| ------------------------------- | ------------------------------ |
-| `id`                            | User id                        |
-| `grant(power)`, `revoke(power)` | Chainable power changes        |
-| `hasPower(power)`               | `boolean`                      |
-| `color`                         | Free-form string, `''` default |
+| Member                          | Description                             |
+| ------------------------------- | --------------------------------------- |
+| `id`                            | User id                                 |
+| `grant(power)`, `revoke(power)` | Chainable power changes                 |
+| `hasPower(power)`               | `boolean`                               |
+| `powers`                        | Granted powers, as `POWERS[]`           |
+| `color`                         | Free-form string, `''` by default       |
+| `toJSON()`                      | Plain snapshot: `{ id, color, powers }` |
+
+### Enums
+
+All enums are string enums, so their values stay readable once serialized or stored.
+
+| Enum                 | Values                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `POWERS`             | `READ` `'read'`, `WRITE` `'write'`, `MODERATE` `'moderate'`                                |
+| `CHANNEL_ATTRIBUTES` | `PERSISTENT` `'persistent'`, `HIDDEN` `'hidden'`                                           |
+| `LEAVE_REASONS`      | `LEFT` `'left'`, `KICKED` `'kicked'`                                                       |
+| `TXAT_EVENTS`        | `'message.post'`, `'you.joined'`, `'you.left'`, `'user.joined'`, `'user.left'`, `'closed'` |
 
 ## Limitations
 
 - **In memory only.** Restarting your process clears everything; persist what you need from the
   events.
 - **No transport, no formatting.** By design: txat decides _who_ gets _what_, you deliver it.
-- **Node.js only** for now (uses `node:events`).
 
 ## Upgrading from 1.x
 
