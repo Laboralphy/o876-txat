@@ -26,7 +26,7 @@ automatically switches when moving around, but nothing in it is game-specific.
 npm install @laboralphy/o876-txat
 ```
 
-Runs on Node.js 20 or later, and on any runtime providing `crypto.randomUUID()` (Deno, Bun,
+Runs on Node.js 24 or later, and on any runtime providing `crypto.randomUUID()` (Deno, Bun,
 browsers in a secure context).
 
 ## Quick start
