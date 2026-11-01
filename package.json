@@ -66,7 +66,7 @@
         "eslint-config-prettier": "^10.1.8",
         "prettier": "^3.8.4",
         "publint": "^0.3.12",
-        "tsup": "^8.5.0",
+        "tsup": "^9.0.0",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.61.0",
         "vitest": "^5.0.2"
